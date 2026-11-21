@@ -62,6 +62,9 @@ const SHELF = ['whisky','gin','vodka','rum','tequila','brandy','bourbon','rye','
 const DEFAULT_SESSION = () => ({glass:'rocks',x:620,y:626,volume:0,ice:0,stirs:0,shakes:0,garnish:null,decorations:[],ingredients:{},color:'#a7b1b4',selected:null});
 let state={session:DEFAULT_SESSION(),archive:[],name:'User',sessions:0,sound:true};
 try {const stored=JSON.parse(localStorage.getItem(STORAGE)||'null');if(stored&&typeof stored==='object'){state={...state,...stored};state.session={...DEFAULT_SESSION(),...(stored.session||{})};state.archive=Array.isArray(stored.archive)?stored.archive:[];}} catch(e){}
+if(state.session.ingredients?.orange){delete state.session.ingredients.orange;state.session.volume=Object.values(state.session.ingredients).reduce((sum,n)=>sum+Number(n||0),0)}
+if(state.session.selected==='orange')state.session.selected=null;
+if(state.session.garnish==='orange')state.session.garnish=null;
 function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(state))}catch(e){}}
 let toastTimer,helpTimer,activePage='home';
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600)}
