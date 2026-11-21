@@ -314,7 +314,18 @@
   function onDown(e){
     if(e.button!==0)return;
     const p=pointerXY(e);let kind='orbit';
-    if(mode==='flower'&&selectedFlower>=0&&nearGlass(e))kind='flower';
+    if(mode==='flower'&&flowerMeshes.length){
+      const rect=renderer.domElement.getBoundingClientRect();
+      pointerNDC.set((e.clientX-rect.left)/rect.width*2-1,1-(e.clientY-rect.top)/rect.height*2);
+      flowerRaycaster.setFromCamera(pointerNDC,camera);
+      const hits=flowerRaycaster.intersectObjects(flowerMeshes,true);
+      if(hits.length){
+        let found=hits[0].object;
+        while(found&&!Number.isInteger(found.userData.decIndex))found=found.parent;
+        if(found){selectedFlower=found.userData.decIndex;showFlowerEdit();kind='flower';}
+      }
+    }
+    if(kind==='flower')kind='flower';
     else if(mode==='ice'&&(p.x<p.w*.49||nearGlass(e)))kind='ice';
     else if(mode==='shake'&&nearGlass(e))kind='shake';
     else if(heldId&&nearBottle(e))kind='pour';
