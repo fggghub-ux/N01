@@ -20,8 +20,6 @@
   renderer.domElement.className='n01-webgl';
   renderer.domElement.setAttribute('aria-label','可拖动酒杯、倾倒酒液的三维调酒场景');
   stage.appendChild(renderer.domElement);
-  stage.classList.add('has-3d');
-  document.documentElement.classList.add('n01-3d-ready');
   const scene=new THREE.Scene();scene.background=new THREE.Color('#101113');
   const camera=new THREE.PerspectiveCamera(37,1,.1,80);
   const target=new THREE.Vector3(0,2.13,1.1);
@@ -434,6 +432,7 @@
   const oldHUD=document.querySelector('.bar-bottom');if(oldHUD)oldHUD.classList.add('bar-bottom-legacy');
   if(!B.state.session.decorations)B.state.session.decorations=[];
   buildGlass();resize();paint(performance.now());
+  stage.classList.add('has-3d');document.documentElement.classList.add('n01-3d-ready');
   if(B.state.session.selected)makeHeld(B.state.session.selected);
   setTimeout(()=>{try{const cover=document.getElementById('home-scene');const picture=snapshot();if(cover&&picture){cover.style.backgroundImage='linear-gradient(90deg,rgba(4,5,6,.88),rgba(5,6,7,.18)),url('+picture+')';cover.classList.add('n01-home-picture')}}catch(e){}},750);
   B.persist();B.updateHUD();
