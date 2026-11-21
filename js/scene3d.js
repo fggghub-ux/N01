@@ -83,6 +83,31 @@
   if(!B.state.session.glass)B.state.session.glass=activeId;
   const glassAnchor=new THREE.Group();glassAnchor.position.set(.2,1.30,3.15);scene.add(glassAnchor);
   let drinkGroup=null,liquidMesh=null,liquidSurface=null,surfaceBase=null,iceMeshes=[],flowerMeshes=[],form={radius:.5,bottom:.45,height:.9,stem:.1,base:.0},mode='glass',heldBottle=null,heldId=null,spoon=null,gesture=null,swirl=0,ripple=0,visualPour=0,transfer=null;
+  const flowMaterial=new THREE.MeshBasicMaterial({color:'#d8c8cb',transparent:true,opacity:.82});
+  const pourStream=new THREE.Mesh(new THREE.CylinderGeometry(.018,.026,1,14),flowMaterial);
+  scene.add(pourStream);pourStream.visible=false;
+  const yAxis=new THREE.Vector3(0,1,0);
+  function connectFlow(mesh,start,end){
+    const diff=end.clone().sub(start),height=diff.length();
+    mesh.position.copy(start).add(end).multiplyScalar(.5);
+    mesh.quaternion.setFromUnitVectors(yAxis,diff.normalize());
+    mesh.scale.set(1,height,1);
+  }
+  const bucket=new THREE.Group();bucket.position.set(-3.1,1.30,3.25);scene.add(bucket);
+  const bucketWall=new THREE.Mesh(new THREE.CylinderGeometry(.43,.36,.60,32,1,true),metal);bucketWall.position.y=.33;bucket.add(bucketWall);
+  const bucketRim=new THREE.Mesh(new THREE.TorusGeometry(.43,.027,10,40),glassEdge);
+  bucketRim.rotation.x=Math.PI/2;bucketRim.position.y=.64;bucket.add(bucketRim);
+  for(let i=0;i<5;i++){const v=new THREE.Mesh(new THREE.BoxGeometry(.18,.18,.18),iceMaterial);v.position.set((i%3-1)*.19,.63,Math.floor(i/3)*.18);v.rotation.y=i*.4;bucket.add(v)}
+  const toolSpoon=new THREE.Group();toolSpoon.position.set(2.85,1.3,3.25);scene.add(toolSpoon);
+  const spoonStem=new THREE.Mesh(new THREE.CylinderGeometry(.012,.014,1.05,12),metal);
+  spoonStem.rotation.z=-.36;spoonStem.position.y=.54;toolSpoon.add(spoonStem);
+  const spoonTip=new THREE.Mesh(new THREE.SphereGeometry(.066,16,12),metal);spoonTip.scale.set(.55,1.1,.42);spoonTip.position.set(-.19,.06,0);toolSpoon.add(spoonTip);
+  const shaker=new THREE.Group();shaker.position.set(3.76,1.3,3.15);scene.add(shaker);
+  const shakerBody=new THREE.Mesh(new THREE.CylinderGeometry(.25,.16,.9,36),metal);shakerBody.position.y=.45;shaker.add(shakerBody);
+  const shakerTop=new THREE.Mesh(new THREE.CylinderGeometry(.14,.24,.23,36),metal);shakerTop.position.y=1.00;shaker.add(shakerTop);
+  const liveSpoon=new THREE.Group();scene.add(liveSpoon);liveSpoon.visible=false;
+  const liveSpoonMesh=new THREE.Mesh(new THREE.CylinderGeometry(.012,.015,1.7,12),metal);liveSpoonMesh.position.y=.75;liveSpoon.add(liveSpoonMesh);
+  const flowerRaycaster=new THREE.Raycaster(),pointerNDC=new THREE.Vector2();
   function shapeAt(t,id=activeId){const spec=specs[id]||specs.rocks;let [shape,r,h,stem]=spec;let radius=r;
     if(shape==='cone')radius=.07+(r-.07)*t;
     if(shape==='wide')radius=r*(.78+.22*Math.sin(t*Math.PI*.72));
@@ -286,6 +311,7 @@
       if(heldBottle){heldBottle.position.x=-1.6+(p.x-g.start.x)/p.w*5.5;heldBottle.position.y=1.38-(p.y-g.start.y)/p.h*2.4;heldBottle.rotation.z=-.14}
     }
     if(g.kind==='stir'){
+      liveSpoon.visible=true;liveSpoon.position.set(glassAnchor.position.x+.16,1.32+form.stem+form.height*.48,glassAnchor.position.z);liveSpoon.rotation.z=Math.sin(performance.now()*.008)*.15;
       const a=Math.atan2(p.y-p.h*.52,p.x-p.w*.5);if(g.angle!==null){let da=a-g.angle;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;g.circle+=Math.abs(da);swirl=Math.max(-3,Math.min(3,swirl+da*1.3));ripple=Math.min(1,ripple+.06);}
       g.angle=a;
     }
@@ -297,7 +323,7 @@
   function onUp(e){
     if(!gesture)return;const g=gesture,p=pointerXY(e),dx=p.x-g.start.x,dy=p.y-g.start.y;
     if(g.kind==='swipe'){const fast=Math.abs(dx)>42||Math.abs(dx)/(performance.now()-g.startTime+1)>.42;if(fast)turnGlass(dx<0?1:-1);glassAnchor.position.x=.2;glassAnchor.rotation.z=0}
-    if(g.kind==='stir'){if(g.circle>Math.PI*.6){B.state.session.stirs=(B.state.session.stirs||0)+Math.max(1,Math.round(g.circle/(Math.PI*2)));B.persist();B.updateHUD();B.ding();note('已完成搅拌 · 酒液将逐渐恢复平静')}}
+    if(g.kind==='stir'){liveSpoon.visible=false;if(g.circle>Math.PI*.6){B.state.session.stirs=(B.state.session.stirs||0)+Math.max(1,Math.round(g.circle/(Math.PI*2)));B.persist();B.updateHUD();B.ding();note('已完成搅拌 · 酒液将逐渐恢复平静')}}
     if(g.kind==='shake'){glassAnchor.position.x=.2;if(g.changes>=3){B.state.session.shakes=(B.state.session.shakes||0)+1;B.persist();B.updateHUD();B.ding();note('摇酒完成')}}
     if(g.kind==='ice'){if(nearGlass(e)||Math.abs(dx)>25){addIce()}else note('将冰块拖向杯口后松开')}
     if((g.kind==='pour'||g.kind==='pour-hold'||g.kind==='glass-gesture')&&heldBottle){heldBottle.position.set(-1.6,1.38,3.2);heldBottle.rotation.z=-.12;visualPour=0;}
@@ -315,14 +341,20 @@
     const s=B.state.session;
     if(s.glass&&s.glass!==activeId&&!transfer)buildGlass();
     if(!transfer&&s.volume!==previousVolume){previousVolume=s.volume;rebuildLiquid()}
+    let flowing=false;
     if(gesture&&(gesture.kind==='pour'||gesture.kind==='pour-hold'||(gesture.kind==='glass-gesture'&&heldId&&t-gesture.startTime>330))&&heldId){
       const hold=t-gesture.startTime>220;
       if(hold){
         const p=gesture.last,q=project(new THREE.Vector3(glassAnchor.position.x,2.15,glassAnchor.position.z));
         if(Math.abs(p.x-q.x)<p.w*.24&&Math.abs(p.y-q.y)<p.h*.36){
-          heldBottle.rotation.z=-1.02;volumeAdd(dt*34);visualPour=1;
+          heldBottle.rotation.z=-1.02;volumeAdd(dt*34);visualPour=1;flowing=true;
         }else visualPour=0;
       }
+    }
+    pourStream.visible=flowing;
+    if(flowing&&heldBottle){
+      flowMaterial.color.set(B.state.session.color||'#bfc5cb');
+      connectFlow(pourStream,new THREE.Vector3(heldBottle.position.x+.43,heldBottle.position.y+.9,heldBottle.position.z),new THREE.Vector3(glassAnchor.position.x,1.33+form.stem+form.height,glassAnchor.position.z));
     }
     if(transfer&&transfer.volume){const f=Math.min(1,(t-transfer.start)/700);glassAnchor.rotation.z=-Math.sin(f*Math.PI)*.52;glassAnchor.position.x=.2-Math.sin(f*Math.PI)*.19}
     else if(!gesture||gesture.kind!=='swipe'&&gesture.kind!=='shake'){glassAnchor.rotation.z*=.88;glassAnchor.position.x+=(.2-glassAnchor.position.x)*.17}
