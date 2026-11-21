@@ -234,12 +234,12 @@
     B.updateHUD();B.persist();ripple=Math.min(1,ripple+.19);
   }
   function addIce(){const s=B.state.session;s.ice=Math.min(9,(s.ice||0)+1);rebuildIce();ripple=.9;B.persist();B.updateHUD();B.ding('ice');note('冰块已投入酒杯 · '+s.ice)}
-  function addFlower(id){const s=B.state.session;if(!flowerTypes[id])return;s.decorations=s.decorations||[];s.decorations.push({id,x:(Math.random()-.5)*.33,y:0,z:(Math.random()-.5)*.25,rotation:Math.random()*2,scale:1});selectedFlower=s.decorations.length-1;rebuildFlowers();showFlowerEdit();B.persist();note('可拖动装饰调整位置，点击下方按钮旋转、缩放或删除');closeTray()}
+  function addFlower(id){mode='flower';const s=B.state.session;if(!flowerTypes[id])return;s.decorations=s.decorations||[];s.decorations.push({id,x:(Math.random()-.5)*.33,y:0,z:(Math.random()-.5)*.25,rotation:Math.random()*2,scale:1});selectedFlower=s.decorations.length-1;rebuildFlowers();showFlowerEdit();B.persist();note('可拖动装饰调整位置，点击下方按钮旋转、缩放或删除');closeTray()}
   function showFlowerEdit(){find('n01-flower-edit').hidden=selectedFlower<0}
   led.addEventListener('click',event=>{
     const b=event.target.closest('button');if(!b)return;
     if(b.id==='n01-view-all'){showTray('glasses');return}
-    if(b.dataset.tray){showTray(b.dataset.tray);return}
+    if(b.dataset.tray){if(b.dataset.tray==='glasses')mode='glass';showTray(b.dataset.tray);return}
     const action=b.dataset.action;
     if(action==='close'){closeTray();return}
     if(action==='save'){document.getElementById('btn-save').click();closeTray();return}
@@ -254,7 +254,7 @@
     if(b.dataset.kind==='drink'){chooseDrink(b.dataset.id);return}
     if(b.dataset.kind==='flower'){addFlower(b.dataset.id);return}
     if(b.dataset.kind==='tool'){
-      if(b.dataset.id==='resetcam'){yaw=0;zoom=10.4;look();closeTray();return}
+      if(b.dataset.id==='resetcam'){yaw=0;zoom=10.4;look();mode='glass';closeTray();return}
       mode=b.dataset.id;closeTray();note(({ice:'从左侧冰桶拖动冰块到中央酒杯',stir:'按住酒杯在液面画圈，酒液随手势旋转',shake:'按住杯子左右往返晃动'})[mode]);
     }
   });
@@ -265,17 +265,21 @@
   function onDown(e){
     if(e.button!==0)return;
     const p=pointerXY(e);let kind='orbit';
-    if(mode==='stir'&&nearGlass(e))kind='stir';
-    else if(mode==='shake'&&nearGlass(e))kind='shake';
+    if(mode==='flower'&&selectedFlower>=0&&nearGlass(e))kind='flower';
     else if(mode==='ice'&&(p.x<p.w*.49||nearGlass(e)))kind='ice';
-    else if(heldId&&(nearBottle(e)||nearGlass(e)))kind='pour';
-    else if(nearGlass(e))kind='swipe';
-    else if(flowerMeshes.length&&nearGlass(e)&&mode==='garnish')kind='flower';
+    else if(mode==='shake'&&nearGlass(e))kind='shake';
+    else if(heldId&&nearBottle(e))kind='pour';
+    else if(nearGlass(e))kind='glass-gesture';
     gesture={kind,start:p,last:p,startTime:performance.now(),lastTime:performance.now(),angle:null,circle:0,changes:0,lastDx:0,velocity:0};
     renderer.domElement.setPointerCapture(e.pointerId);e.preventDefault();
   }
   function onMove(e){
     if(!gesture)return;const p=pointerXY(e),g=gesture,dx=p.x-g.start.x,dy=p.y-g.start.y;const ms=Math.max(1,performance.now()-g.lastTime);
+    if(g.kind==='glass-gesture'){
+      if(Math.abs(dx)>35&&Math.abs(dx)>Math.abs(dy)*1.35)g.kind='swipe';
+      else if(mode==='stir'&&Math.hypot(dx,dy)>8)g.kind='stir';
+      else if(heldId&&performance.now()-g.startTime>260)g.kind='pour-hold';
+    }
     if(g.kind==='swipe'){glassAnchor.position.x=.2+dx/p.w*3.2;glassAnchor.rotation.z=-dx/p.w*.24}
     if(g.kind==='orbit'){yaw=Math.max(-.22,Math.min(.22,yaw+(p.x-g.last.x)*.002));look()}
     if(g.kind==='pour'){
@@ -296,7 +300,7 @@
     if(g.kind==='stir'){if(g.circle>Math.PI*.6){B.state.session.stirs=(B.state.session.stirs||0)+Math.max(1,Math.round(g.circle/(Math.PI*2)));B.persist();B.updateHUD();B.ding();note('已完成搅拌 · 酒液将逐渐恢复平静')}}
     if(g.kind==='shake'){glassAnchor.position.x=.2;if(g.changes>=3){B.state.session.shakes=(B.state.session.shakes||0)+1;B.persist();B.updateHUD();B.ding();note('摇酒完成')}}
     if(g.kind==='ice'){if(nearGlass(e)||Math.abs(dx)>25){addIce()}else note('将冰块拖向杯口后松开')}
-    if(g.kind==='pour'&&heldBottle){heldBottle.position.set(-1.6,1.38,3.2);heldBottle.rotation.z=-.12;visualPour=0;}
+    if((g.kind==='pour'||g.kind==='pour-hold'||g.kind==='glass-gesture')&&heldBottle){heldBottle.position.set(-1.6,1.38,3.2);heldBottle.rotation.z=-.12;visualPour=0;}
     if(g.kind==='flower')B.persist();
     gesture=null;
   }
@@ -311,7 +315,7 @@
     const s=B.state.session;
     if(s.glass&&s.glass!==activeId&&!transfer)buildGlass();
     if(!transfer&&s.volume!==previousVolume){previousVolume=s.volume;rebuildLiquid()}
-    if(gesture&&gesture.kind==='pour'&&heldId){
+    if(gesture&&(gesture.kind==='pour'||gesture.kind==='pour-hold'||(gesture.kind==='glass-gesture'&&heldId&&t-gesture.startTime>330))&&heldId){
       const hold=t-gesture.startTime>220;
       if(hold){
         const p=gesture.last,q=project(new THREE.Vector3(glassAnchor.position.x,2.15,glassAnchor.position.z));
@@ -345,7 +349,8 @@
   }
   const shared={
     active:true,
-    sync(){const id=B.state.session.glass||'rocks';if(id!==activeId){buildGlass()}else{rebuildLiquid();rebuildIce();rebuildFlowers()}updateLabel()},
+    chooseDrink,
+    sync(){const id=B.state.session.glass||'rocks';if(id!==activeId){buildGlass()}else{rebuildLiquid();rebuildIce();rebuildFlowers()}if(B.state.session.selected&&B.state.session.selected!==heldId)makeHeld(B.state.session.selected);updateLabel()},
     capture:snapshot
   };
   window.N01Scene=shared;
