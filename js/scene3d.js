@@ -7,7 +7,7 @@
   if(!stage||!shell)return;
   let THREE;
   try{THREE=await import('https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js')}
-  catch(error){console.warn('3D engine could not load',error);return;}
+  catch(error){try{THREE=await import('https://esm.sh/three@0.160.1')}catch(next){console.warn('3D engine unavailable',error,next);const h=document.getElementById('scene-helper');if(h){h.style.display='block';h.textContent='无法加载 3D 组件，当前显示简化场景。';}return;}}
   let renderer;
   try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance',preserveDrawingBuffer:true})}
   catch(error){console.warn('WebGL unavailable',error);return;}
