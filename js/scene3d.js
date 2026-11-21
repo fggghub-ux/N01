@@ -323,7 +323,14 @@
         if(found){selectedFlower=found.userData.decIndex;showFlowerEdit();kind='flower';}
       }
     }
-    if(kind==='flower')kind='flower';
+    if(kind!=='flower'){
+      const rect=renderer.domElement.getBoundingClientRect();
+      pointerNDC.set((e.clientX-rect.left)/rect.width*2-1,1-(e.clientY-rect.top)/rect.height*2);
+      flowerRaycaster.setFromCamera(pointerNDC,camera);
+      const hit=flowerRaycaster.intersectObjects(bottleMeshes,true)[0];
+      if(hit&&hit.object.userData.drink){chooseDrink(hit.object.userData.drink);kind='pour'}
+    }
+    if(kind==='flower'||kind==='pour')kind=kind;
     else if(mode==='ice'&&(p.x<p.w*.49||nearGlass(e)))kind='ice';
     else if(mode==='shake'&&nearGlass(e))kind='shake';
     else if(heldId&&nearBottle(e))kind='pour';
