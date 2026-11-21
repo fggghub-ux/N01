@@ -232,15 +232,39 @@
     if(type==='floral')content=Object.entries(flowerTypes).map(([id,d])=>tile('flower',id,d.name,d.cn,'✿')).join('');
     find('n01-tray-body').innerHTML=content;
   }
+  function makeReceiver(id){
+    const [shape,r,h,stem]=specs[id]||specs.rocks;
+    const group=new THREE.Group(),points=[new THREE.Vector2(0,stem+.015),new THREE.Vector2(shapeAt(0,id)*.93,stem+.015)];
+    for(let i=0;i<=34;i++){const t=i/34;points.push(new THREE.Vector2(shapeAt(t,id),stem+.04+h*t))}
+    points.push(new THREE.Vector2(shapeAt(1,id)-.026,stem+.04+h-.006));
+    for(let i=34;i>=0;i--){const t=i/34;points.push(new THREE.Vector2(Math.max(.03,shapeAt(t,id)-.026),stem+.04+h*t))}
+    const shell=new THREE.Mesh(new THREE.LatheGeometry(points,72),glassMaterial);group.add(shell);
+    if(stem>.22){const foot=new THREE.Mesh(new THREE.CylinderGeometry(r*.72,r*.78,.05,36),glassMaterial);foot.position.y=.04;group.add(foot);const leg=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,stem,16),glassMaterial);leg.position.y=stem/2;group.add(leg)}
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(shapeAt(1,id),.011,8,72),glassEdge);ring.rotation.x=Math.PI/2;ring.position.y=stem+.04+h;group.add(ring);
+    const fillMat=new THREE.MeshPhysicalMaterial({color:B.state.session.color,roughness:.13,transparent:true,opacity:.81,metalness:.07});
+    const fill=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(.09,shapeAt(.25,id)-.035),Math.max(.07,shapeAt(0,id)-.035),1,48),fillMat);
+    fill.scale.y=.001;group.add(fill);
+    group.position.x=.75;glassAnchor.add(group);
+    const stream=new THREE.Mesh(new THREE.CylinderGeometry(.015,.024,1,12),flowMaterial);glassAnchor.add(stream);
+    return {group,fill,stream,rimHeight:stem+h+.04,stem,h};
+  }
   function switchGlass(next){
     if(!B.GLASSES[next]||next===activeId||transfer)return;
     const vol=B.state.session.volume||0,cap=B.GLASSES[next].cap;
     if(vol>cap){B.toast('新杯容量不足：'+cap+' ML；当前饮品 '+Math.round(vol)+' ML。请选择更大的杯型。');return}
-    transfer={start:performance.now(),old:drinkGroup,next,volume:vol};
+    if(!vol){B.state.session.glass=next;buildGlass();B.persist();B.ding();return}
+    const receiver=makeReceiver(next);
+    transfer={start:performance.now(),old:drinkGroup,next,volume:vol,receiver};
     B.state.session.glass=next;B.persist();
-    if(!vol){buildGlass();transfer=null;B.ding();return}
     note('正在把当前酒液转入 '+B.GLASSES[next].name+'…');
-    setTimeout(()=>{buildGlass();transfer=null;ripple=1;B.ding('pour');note('酒液已转移，配方与用量保持不变');},710);
+    setTimeout(()=>{
+      if(!transfer)return;
+      glassAnchor.remove(transfer.receiver.group,transfer.receiver.stream);
+      transfer.receiver.group.traverse(o=>{if(o.geometry)o.geometry.dispose()});
+      transfer.receiver.stream.geometry.dispose();
+      transfer.old.position.x=0;transfer.old.rotation.z=0;
+      transfer=null;buildGlass();ripple=1;B.ding('pour');note('酒液已转移，配方与用量保持不变');
+    },1150);
   }
   function turnGlass(steps){switchGlass(ordered[(ordered.indexOf(activeId)+steps+ordered.length)%ordered.length])}
   function chooseDrink(id){if(!B.byId(id))return;B.state.session.selected=id;B.persist();B.updateHUD();makeHeld(id);mode='pour';note('拖动前景酒瓶至酒杯上方，保持按住即可倒酒');closeTray();}
@@ -356,7 +380,17 @@
       flowMaterial.color.set(B.state.session.color||'#bfc5cb');
       connectFlow(pourStream,new THREE.Vector3(heldBottle.position.x+.43,heldBottle.position.y+.9,heldBottle.position.z),new THREE.Vector3(glassAnchor.position.x,1.33+form.stem+form.height,glassAnchor.position.z));
     }
-    if(transfer&&transfer.volume){const f=Math.min(1,(t-transfer.start)/700);glassAnchor.rotation.z=-Math.sin(f*Math.PI)*.52;glassAnchor.position.x=.2-Math.sin(f*Math.PI)*.19}
+    if(transfer&&transfer.volume){
+      const f=Math.min(1,(t-transfer.start)/1140),fillProgress=Math.min(1,Math.max(0,(f-.13)/.73));
+      transfer.old.position.x=-.57;transfer.old.rotation.z=-Math.sin(f*Math.PI)*.64;
+      const rec=transfer.receiver;
+      const height=rec.h*Math.pow(transfer.volume/B.GLASSES[transfer.next].cap,.82)*fillProgress;
+      rec.fill.scale.y=Math.max(.001,height);rec.fill.position.y=rec.stem+.07+height/2;
+      rec.stream.visible=f>.13&&f<.93;
+      if(rec.stream.visible)connectFlow(rec.stream,new THREE.Vector3(-.22,form.stem+form.height*.85,0),new THREE.Vector3(.75,rec.rimHeight-.07,0));
+      if(liquidMesh){liquidMesh.scale.y=Math.max(.015,1-fillProgress)}
+      if(liquidSurface)liquidSurface.visible=fillProgress<.55;
+    }
     else if(!gesture||gesture.kind!=='swipe'&&gesture.kind!=='shake'){glassAnchor.rotation.z*=.88;glassAnchor.position.x+=(.2-glassAnchor.position.x)*.17}
     if(liquidSurface&&surfaceBase){
       const a=liquidSurface.geometry.attributes.position,arr=a.array;const strength=Math.min(2.8,Math.abs(swirl));
